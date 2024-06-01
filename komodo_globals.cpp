@@ -35,7 +35,7 @@ uint8_t ASSETCHAINS_CCDISABLES[256];
 std::vector<std::string> ASSETCHAINS_PRICES,ASSETCHAINS_STOCKS;
 
 uint32_t ASSETCHAINS_NUMALGOS = 1;
-//uint32_t ASSETCHAINS_EQUIHASH = _ASSETCHAINS_EQUIHASH;
+uint32_t ASSETCHAINS_EQUIHASH = _ASSETCHAINS_EQUIHASH;
 
 const char *ASSETCHAINS_ALGORITHMS[]    = { "equihash" };
 uint64_t ASSETCHAINS_NONCEMASK[]        = { 0xffff };
@@ -44,7 +44,7 @@ uint32_t ASSETCHAINS_HASHESPERROUND[]   = { 1 };
 // min diff returned from GetNextWorkRequired needs to be added here for each algo, so they can work with ac_staked.
 uint32_t ASSETCHAINS_MINDIFF[]          = { 537857807 }; // KOMODO_MINDIFF_NBITS = 0x200f0f0f
 
-//uint32_t ASSETCHAINS_ALGO = _ASSETCHAINS_EQUIHASH;
+uint32_t ASSETCHAINS_ALGO = _ASSETCHAINS_EQUIHASH;
 
 int32_t ASSETCHAINS_SAPLING = -1;
 int32_t ASSETCHAINS_OVERWINTER = -1;
@@ -65,3 +65,9 @@ int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
 
 std::map <std::int8_t, int32_t> mapHeightEvalActivate;
+
+int32_t ASSETCHAINS_BLOCKTIME = 60;
+uint64_t ASSETCHAINS_NK[2];
+
+#define _COINBASE_MATURITY 100  // defauly maturity
+unsigned int WITNESS_CACHE_SIZE = _COINBASE_MATURITY+10;

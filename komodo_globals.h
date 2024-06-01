@@ -10,7 +10,12 @@
 #define NUM_KMD_NOTARIES 64
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 #define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
+#define _ASSETCHAINS_EQUIHASH 0
 #define ASSETCHAINS_MAX_ERAS 7
+
+#define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
+#define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
+#define CLEARBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] &= ~(1 << ((bitoffset) & 7)))
 
 extern bool KOMODO_LOADINGBLOCKS; // defined in pow.cpp, boolean, 1 if currently loading the block index, 0 if not
 extern bool IS_KOMODO_NOTARY;
@@ -68,5 +73,13 @@ extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 extern int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
 
 extern std::map<int8_t, int32_t> mapHeightEvalActivate;
+extern unsigned int WITNESS_CACHE_SIZE;
+extern int32_t ASSETCHAINS_BLOCKTIME;
+extern uint64_t ASSETCHAINS_NK[2];
+extern uint32_t ASSETCHAINS_EQUIHASH;
+extern uint32_t ASSETCHAINS_ALGO;
+
+/** Maximum reorg length we will accept before we shut down and alert the user. */
+static unsigned int MAX_REORG_LENGTH = 100 - 1; // based on COINBASE_MATURITY
 
 #endif // KOMODO_GLOBALS_H

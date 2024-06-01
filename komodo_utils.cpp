@@ -1,6 +1,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdarg>
+#include <sstream>
 
 #include <inttypes.h>
 
@@ -46,6 +47,40 @@ int atoi(const std::string& str)
     return atoi(str.c_str());
 }
 
+void Split(const std::string& strVal, int32_t outsize, uint64_t *outVals, const uint64_t nDefault)
+{
+    std::stringstream ss(strVal);
+    std::vector<uint64_t> vec;
+
+    uint64_t i, nLast, numVals = 0;
+
+    while ( ss.peek() == ' ' )
+        ss.ignore();
+
+    while ( ss >> i )
+    {
+        outVals[numVals] = i;
+        numVals += 1;
+
+        while ( ss.peek() == ' ' )
+            ss.ignore();
+        if ( ss.peek() == ',' )
+            ss.ignore();
+        while ( ss.peek() == ' ' )
+            ss.ignore();
+    }
+
+    if ( numVals > 0 )
+        nLast = outVals[numVals - 1];
+    else
+        nLast = nDefault;
+
+    for ( i = numVals; i < outsize; i++ )
+    {
+        outVals[i] = nLast;
+    }
+}
+
 std::string GetArg(const std::string& strArg, const std::string& strDefault)
 {
     if (mapArgs.count(strArg))
@@ -83,6 +118,33 @@ void StartShutdown(int errorCode)
 {
     // Exit the program immediately with the specified error code
     std::exit(errorCode);
+}
+
+int8_t equihash_params_possible(uint64_t n, uint64_t k)
+{
+    /* To add more of these you also need to edit:
+    * equihash.cpp very end of file with the tempate to point to the new param numbers 
+    * equihash.h
+    *  line 210/217 (declaration of equihash class)
+    * Add this object to the following functions: 
+    *  EhInitialiseState 
+    *  EhBasicSolve
+    *  EhOptimisedSolve
+    *  EhIsValidSolution
+    * Alternatively change ASSETCHAINS_N and ASSETCHAINS_K in komodo_nk.h for fast testing.
+    */
+    if ( k == 9 && (n == 200 || n == 210) )
+        return(0);
+    if ( k == 5 && (n == 150 || n == 144 || n == 96 || n == 48) )
+        return(0);
+    if ( k == ASSETCHAINS_K && n == ASSETCHAINS_N)
+        return(0);
+    return(-1);
+}
+
+void calc_rmd160_sha256(uint8_t rmd160[20],uint8_t *data,int32_t datalen)
+{
+    CHash160().Write((const unsigned char *)data, datalen).Finalize(rmd160); // SHA-256 + RIPEMD-160
 }
 
 void komodo_args(char *argv0)
@@ -197,7 +259,7 @@ void komodo_args(char *argv0)
     {
         LogPrintf("KOMODO_REWIND %d\n",KOMODO_REWIND);
     }
-    KOMODO_EARLYTXID = Parseuint256(GetArg("-earlytxid","0").c_str());    
+    //KOMODO_EARLYTXID = Parseuint256(GetArg("-earlytxid","0").c_str());    
     ASSETCHAINS_EARLYTXIDCONTRACT = GetArg("-ac_earlytxidcontract",0);
 
     if ( !chainName.isKMD() )
