@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "cppbuild",
+			"label": "Build Project",
+			"command": "/usr/bin/g++",
+			"args": [
+				"-std=c++11",
+				"-fdiagnostics-color=always",
+				"-g",
+				"hex.c",
+				"main.cpp",
+				"komodo_globals.cpp",
+				"komodo_utils.cpp",
+				"-o",
+				"komodo-chainparams"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "compiler: /usr/bin/g++"
+		}
+	]
+}
