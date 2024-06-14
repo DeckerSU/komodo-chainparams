@@ -106,7 +106,7 @@ uint32_t swapBytes(uint32_t num) {
 extern assetchain chainName;
 
 int main(int argc, char **argv) {
-    std::cerr << "komodo-chainparams (c) Decker" << std::endl;
+    std::cerr << "komodo-chainparams (q) Decker" << std::endl;
 
     // ParseParameters(argc, argv.get()); // before calling komodo_args -ac_name param should be set in mapArgs
     // komodo_args(argv0Data.get());      // argv0 is passed in try to get ac_name from program suffixes (works for MNZ and BTCH only)
@@ -122,10 +122,11 @@ int main(int argc, char **argv) {
     j["chainname"] = chainName.ToString();
     j["p2pport"] = ASSETCHAINS_P2PPORT;
     j["rpcport"] = ASSETCHAINS_RPCPORT;
-    j["magic"] = ASSETCHAINS_MAGIC;
-    j["magic_hex"] = magicToHex(ASSETCHAINS_MAGIC);
-    j["magic_bytes"] = magicToHex(swapBytes(ASSETCHAINS_MAGIC));
-    
+    if (!chainName.isKMD()) {
+        j["magic"] = ASSETCHAINS_MAGIC;
+        j["magic_hex"] = magicToHex(ASSETCHAINS_MAGIC);
+        j["magic_bytes"] = magicToHex(swapBytes(ASSETCHAINS_MAGIC));
+    }
     std::string s = j.dump();
     std::cout << s << std::endl;
 
