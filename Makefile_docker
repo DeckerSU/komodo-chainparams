@@ -4,9 +4,9 @@ CXX = g++
 # Flags
 CXXFLAGS = -std=c++17 -fdiagnostics-color=always -g -O2 -I. \
            -DHAVE_DECL_LE64TOH=0 \
-           -DHAVE_DECL_HTOBE16=1 \
+           -DHAVE_DECL_HTOBE16=0 \
            -DHAVE_DECL_HTOLE16=0 \
-           -DHAVE_DECL_BE16TOH=1 \
+           -DHAVE_DECL_BE16TOH=0 \
            -DHAVE_DECL_LE16TOH=0 \
            -DHAVE_DECL_HTOBE32=0 \
            -DHAVE_DECL_HTOLE32=0 \

@@ -14,7 +14,7 @@ WORKDIR /app
 RUN git clone https://github.com/DeckerSU/komodo-chainparams.git .
 
 # Build the project using Makefile
-RUN make Makefile_docker
+RUN make -f Makefile_docker all
 
 # Define entrypoint to pass all parameters
 ENTRYPOINT ["./komodo-chainparams"]
