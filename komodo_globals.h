@@ -16,6 +16,8 @@
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
 #define CLEARBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] &= ~(1 << ((bitoffset) & 7)))
+#define KOMODO_MAXNVALUE (((uint64_t)1 << 63) - 1)
+#define KOMODO_BIT63SET(x) ((x) & ((uint64_t)1 << 63))
 
 extern bool KOMODO_LOADINGBLOCKS; // defined in pow.cpp, boolean, 1 if currently loading the block index, 0 if not
 extern bool IS_KOMODO_NOTARY;
@@ -81,5 +83,11 @@ extern uint32_t ASSETCHAINS_ALGO;
 
 /** Maximum reorg length we will accept before we shut down and alert the user. */
 static unsigned int MAX_REORG_LENGTH = 100 - 1; // based on COINBASE_MATURITY
+
+typedef int64_t CAmount;
+static const CAmount COIN = 100000000;
+static const CAmount CENT = 1000000;
+
+#define KOMODO_FIRSTFUNGIBLEID 100
 
 #endif // KOMODO_GLOBALS_H

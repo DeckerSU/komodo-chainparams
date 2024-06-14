@@ -9,6 +9,7 @@
 #include "hex.h"
 #include "komodo_globals.h"
 #include "komodo_utils.h"
+#include "hash.h"
 
 
 std::map<std::string, std::string> mapArgs;
@@ -23,6 +24,199 @@ char *argv0names[] =
 {
     (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH"
 };
+
+uint64_t komodo_current_supply(uint32_t nHeight)
+{
+    uint64_t cur_money;
+    int32_t baseid;
+
+    {
+        // figure out max_money by adding up supply to a maximum of 10,000,000 blocks
+        cur_money = (ASSETCHAINS_SUPPLY+1) * SATOSHIDEN + (ASSETCHAINS_MAGIC & 0xffffff) + ASSETCHAINS_GENESISTXVAL;
+        if ( ASSETCHAINS_LASTERA == 0 && ASSETCHAINS_REWARD[0] == 0 )
+        {
+            cur_money += (nHeight * 10000);// / SATOSHIDEN;
+        }
+        else
+        {
+            for ( int j = 0; j <= ASSETCHAINS_LASTERA; j++ )
+            {
+                // if any condition means we have no more rewards, break
+                if (j != 0 && (nHeight <= ASSETCHAINS_ENDSUBSIDY[j - 1] || (ASSETCHAINS_ENDSUBSIDY[j - 1] == 0 &&
+                    (ASSETCHAINS_REWARD[j] == 0 && (j == ASSETCHAINS_LASTERA || ASSETCHAINS_DECAY[j] != SATOSHIDEN)))))
+                    break;
+
+                // add rewards from this era, up to nHeight
+                int64_t reward = ASSETCHAINS_REWARD[j];
+                
+                //LogPrintf("last.%d reward %llu period %llu\n",(int32_t)ASSETCHAINS_LASTERA,(long long)reward,(long long)ASSETCHAINS_HALVING[j]);
+                if ( reward > 0 )
+                {
+                    uint64_t lastEnd = j == 0 ? 0 : ASSETCHAINS_ENDSUBSIDY[j - 1];
+                    uint64_t curEnd = ASSETCHAINS_ENDSUBSIDY[j] == 0 ? nHeight : nHeight > ASSETCHAINS_ENDSUBSIDY[j] ? ASSETCHAINS_ENDSUBSIDY[j] : nHeight;
+                    uint64_t period = ASSETCHAINS_HALVING[j];
+                    if ( period == 0 )
+                        period = 210000;
+                    uint32_t nSteps = (curEnd - lastEnd) / period;
+                    uint32_t modulo = (curEnd - lastEnd) % period;
+                    uint64_t decay = ASSETCHAINS_DECAY[j];
+
+                    //LogPrintf("period.%llu cur_money %.8f += %.8f * %d\n",(long long)period,(double)cur_money/COIN,(double)reward/COIN,nHeight);
+                    if ( ASSETCHAINS_HALVING[j] == 0 )
+                    {
+                        // no halving, straight multiply
+                        cur_money += reward * (nHeight - 1);
+                        //LogPrintf("cur_money %.8f\n",(double)cur_money/COIN);
+                    }
+                    // if exactly SATOSHIDEN, linear decay to zero or to next era, same as:
+                    // (next_era_reward + (starting reward - next_era_reward) / 2) * num_blocks
+                    else if ( decay == SATOSHIDEN )
+                    {
+                        int64_t lowestSubsidy, subsidyDifference, stepDifference, stepTriangle;
+                        int64_t denominator, modulo=1;
+                        int32_t sign = 1;
+
+                        if ( j == ASSETCHAINS_LASTERA )
+                        {
+                            subsidyDifference = reward;
+                            lowestSubsidy = 0;
+                        }
+                        else
+                        {
+                            // Ex: -ac_eras=3 -ac_reward=0,384,24 -ac_end=1440,260640,0 -ac_halving=1,1440,2103840 -ac_decay 100000000,97750000,0
+                            subsidyDifference = reward - ASSETCHAINS_REWARD[j + 1];
+                            if (subsidyDifference < 0)
+                            {
+                                sign = -1;
+                                subsidyDifference *= sign;
+                                lowestSubsidy = reward;
+                            }
+                            else
+                            {
+                                lowestSubsidy = ASSETCHAINS_REWARD[j + 1];
+                            }
+                        }
+
+                        // if we have not finished the current era, we need to caluclate a total as if we are at the end, with the current
+                        // subsidy. we will calculate the total of a linear era as follows. Each item represents an area calculation:
+                        // a) the rectangle from 0 to the lowest reward in the era * the number of blocks
+                        // b) the rectangle of the remainder of blocks from the lowest point of the era to the highest point of the era if any remainder
+                        // c) the minor triangle from the start of transition from the lowest point to the start of transition to the highest point
+                        // d) one halving triangle (half area of one full step)
+                        //
+                        // we also need:
+                        // e) number of steps = (n - erastart) / halving interval
+                        //
+                        // the total supply from era start up to height is:
+                        // a + b + c + (d * e)
+
+                        // calculate amount in one step's triangular protrusion over minor triangle's hypotenuse
+                        denominator = nSteps * period;
+                        if ( denominator == 0 )
+                            denominator = 1;
+                        // difference of one step vs. total
+                        stepDifference = (period * subsidyDifference) / denominator;
+
+                        // area == coin holding of one step triangle, protruding from minor triangle's hypotenuse
+                        stepTriangle = (period * stepDifference) >> 1;
+
+                        // sign is negative if slope is positive (start is less than end)
+                        if (sign < 0)
+                        {
+                            // use steps minus one for our calculations, and add the potentially partial rectangle
+                            // at the end
+                            cur_money += stepTriangle * (nSteps - 1);
+                            cur_money += stepTriangle * (nSteps - 1) * (nSteps - 1);
+
+                            // difference times number of steps is height of rectangle above lowest subsidy
+                            cur_money += modulo * stepDifference * nSteps;
+                        }
+                        else
+                        {
+                            // if negative slope, the minor triangle is the full number of steps, as the highest
+                            // level step is full. lowest subsidy is just the lowest so far
+                            lowestSubsidy = reward - (stepDifference * nSteps);
+
+                            // add the step triangles, one per step
+                            cur_money += stepTriangle * nSteps;
+
+                            // add the minor triangle
+                            cur_money += stepTriangle * nSteps * nSteps;
+                        }
+
+                        // add more for the base rectangle if lowest subsidy is not 0
+                        cur_money += lowestSubsidy * (curEnd - lastEnd);
+                    }
+                    else
+                    {
+                        for ( int k = lastEnd; k < curEnd; k += period )
+                        {
+                            cur_money += period * reward;
+                            // if zero, we do straight halving
+                            reward = decay ? (reward * decay) / SATOSHIDEN : reward >> 1;
+                        }
+                        cur_money += modulo * reward;
+                    }
+                }
+            }
+        }
+    }    
+    if ( KOMODO_BIT63SET(cur_money) != 0 )
+        return(KOMODO_MAXNVALUE);
+    if ( ASSETCHAINS_COMMISSION != 0 )
+    {
+        uint64_t newval = (cur_money + (cur_money/COIN * ASSETCHAINS_COMMISSION));
+        if ( KOMODO_BIT63SET(newval) != 0 )
+            return(KOMODO_MAXNVALUE);
+        else if ( newval < cur_money ) // check for underflow
+            return(KOMODO_MAXNVALUE);
+        return(newval);
+    }
+    //LogPrintf("cur_money %.8f\n",(double)cur_money/COIN);
+    return(cur_money);
+}
+
+
+uint64_t komodo_max_money()
+{
+    return komodo_current_supply(10000000);
+}
+
+int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp)
+{
+    int32_t i; uint64_t x;
+    if ( rwflag == 0 )
+    {
+        x = 0;
+        for (i=len-1; i>=0; i--)
+        {
+            x <<= 8;
+            x |= serialized[i];
+        }
+        switch ( len )
+        {
+            case 1: *(uint8_t *)endianedp = (uint8_t)x; break;
+            case 2: *(uint16_t *)endianedp = (uint16_t)x; break;
+            case 4: *(uint32_t *)endianedp = (uint32_t)x; break;
+            case 8: *(uint64_t *)endianedp = (uint64_t)x; break;
+        }
+    }
+    else
+    {
+        x = 0;
+        switch ( len )
+        {
+            case 1: x = *(uint8_t *)endianedp; break;
+            case 2: x = *(uint16_t *)endianedp; break;
+            case 4: x = *(uint32_t *)endianedp; break;
+            case 8: x = *(uint64_t *)endianedp; break;
+        }
+        for (i=0; i<len; i++,x >>= 8)
+            serialized[i] = (uint8_t)(x & 0xff);
+    }
+    return(len);
+}
+
 
 int64_t atoi64(const char* psz)
 {
@@ -106,13 +300,13 @@ bool GetBoolArg(const std::string& strArg, bool fDefault)
     return fDefault;
 }
 
-void LogPrintf(const char* format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-}
+// void LogPrintf(const char* format, ...)
+// {
+//     va_list args;
+//     va_start(args, format);
+//     vprintf(format, args);
+//     va_end(args);
+// }
 
 void StartShutdown(int errorCode)
 {
@@ -147,6 +341,178 @@ void calc_rmd160_sha256(uint8_t rmd160[20],uint8_t *data,int32_t datalen)
     CHash160().Write((const unsigned char *)data, datalen).Finalize(rmd160); // SHA-256 + RIPEMD-160
 }
 
+static const uint32_t crc32_tab[] = {
+	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
+	0xe963a535, 0x9e6495a3,	0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
+	0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91, 0x1db71064, 0x6ab020f2,
+	0xf3b97148, 0x84be41de,	0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7,
+	0x136c9856, 0x646ba8c0, 0xfd62f97a, 0x8a65c9ec,	0x14015c4f, 0x63066cd9,
+	0xfa0f3d63, 0x8d080df5,	0x3b6e20c8, 0x4c69105e, 0xd56041e4, 0xa2677172,
+	0x3c03e4d1, 0x4b04d447, 0xd20d85fd, 0xa50ab56b,	0x35b5a8fa, 0x42b2986c,
+	0xdbbbc9d6, 0xacbcf940,	0x32d86ce3, 0x45df5c75, 0xdcd60dcf, 0xabd13d59,
+	0x26d930ac, 0x51de003a, 0xc8d75180, 0xbfd06116, 0x21b4f4b5, 0x56b3c423,
+	0xcfba9599, 0xb8bda50f, 0x2802b89e, 0x5f058808, 0xc60cd9b2, 0xb10be924,
+	0x2f6f7c87, 0x58684c11, 0xc1611dab, 0xb6662d3d,	0x76dc4190, 0x01db7106,
+	0x98d220bc, 0xefd5102a, 0x71b18589, 0x06b6b51f, 0x9fbfe4a5, 0xe8b8d433,
+	0x7807c9a2, 0x0f00f934, 0x9609a88e, 0xe10e9818, 0x7f6a0dbb, 0x086d3d2d,
+	0x91646c97, 0xe6635c01, 0x6b6b51f4, 0x1c6c6162, 0x856530d8, 0xf262004e,
+	0x6c0695ed, 0x1b01a57b, 0x8208f4c1, 0xf50fc457, 0x65b0d9c6, 0x12b7e950,
+	0x8bbeb8ea, 0xfcb9887c, 0x62dd1ddf, 0x15da2d49, 0x8cd37cf3, 0xfbd44c65,
+	0x4db26158, 0x3ab551ce, 0xa3bc0074, 0xd4bb30e2, 0x4adfa541, 0x3dd895d7,
+	0xa4d1c46d, 0xd3d6f4fb, 0x4369e96a, 0x346ed9fc, 0xad678846, 0xda60b8d0,
+	0x44042d73, 0x33031de5, 0xaa0a4c5f, 0xdd0d7cc9, 0x5005713c, 0x270241aa,
+	0xbe0b1010, 0xc90c2086, 0x5768b525, 0x206f85b3, 0xb966d409, 0xce61e49f,
+	0x5edef90e, 0x29d9c998, 0xb0d09822, 0xc7d7a8b4, 0x59b33d17, 0x2eb40d81,
+	0xb7bd5c3b, 0xc0ba6cad, 0xedb88320, 0x9abfb3b6, 0x03b6e20c, 0x74b1d29a,
+	0xead54739, 0x9dd277af, 0x04db2615, 0x73dc1683, 0xe3630b12, 0x94643b84,
+	0x0d6d6a3e, 0x7a6a5aa8, 0xe40ecf0b, 0x9309ff9d, 0x0a00ae27, 0x7d079eb1,
+	0xf00f9344, 0x8708a3d2, 0x1e01f268, 0x6906c2fe, 0xf762575d, 0x806567cb,
+	0x196c3671, 0x6e6b06e7, 0xfed41b76, 0x89d32be0, 0x10da7a5a, 0x67dd4acc,
+	0xf9b9df6f, 0x8ebeeff9, 0x17b7be43, 0x60b08ed5, 0xd6d6a3e8, 0xa1d1937e,
+	0x38d8c2c4, 0x4fdff252, 0xd1bb67f1, 0xa6bc5767, 0x3fb506dd, 0x48b2364b,
+	0xd80d2bda, 0xaf0a1b4c, 0x36034af6, 0x41047a60, 0xdf60efc3, 0xa867df55,
+	0x316e8eef, 0x4669be79, 0xcb61b38c, 0xbc66831a, 0x256fd2a0, 0x5268e236,
+	0xcc0c7795, 0xbb0b4703, 0x220216b9, 0x5505262f, 0xc5ba3bbe, 0xb2bd0b28,
+	0x2bb45a92, 0x5cb36a04, 0xc2d7ffa7, 0xb5d0cf31, 0x2cd99e8b, 0x5bdeae1d,
+	0x9b64c2b0, 0xec63f226, 0x756aa39c, 0x026d930a, 0x9c0906a9, 0xeb0e363f,
+	0x72076785, 0x05005713, 0x95bf4a82, 0xe2b87a14, 0x7bb12bae, 0x0cb61b38,
+	0x92d28e9b, 0xe5d5be0d, 0x7cdcefb7, 0x0bdbdf21, 0x86d3d2d4, 0xf1d4e242,
+	0x68ddb3f8, 0x1fda836e, 0x81be16cd, 0xf6b9265b, 0x6fb077e1, 0x18b74777,
+	0x88085ae6, 0xff0f6a70, 0x66063bca, 0x11010b5c, 0x8f659eff, 0xf862ae69,
+	0x616bffd3, 0x166ccf45, 0xa00ae278, 0xd70dd2ee, 0x4e048354, 0x3903b3c2,
+	0xa7672661, 0xd06016f7, 0x4969474d, 0x3e6e77db, 0xaed16a4a, 0xd9d65adc,
+	0x40df0b66, 0x37d83bf0, 0xa9bcae53, 0xdebb9ec5, 0x47b2cf7f, 0x30b5ffe9,
+	0xbdbdf21c, 0xcabac28a, 0x53b39330, 0x24b4a3a6, 0xbad03605, 0xcdd70693,
+	0x54de5729, 0x23d967bf, 0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94,
+	0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
+};
+
+uint32_t calc_crc32(uint32_t crc,const void *buf,size_t size)
+{
+	const uint8_t *p;
+
+	p = (const uint8_t *)buf;
+	crc = crc ^ ~0U;
+
+	while (size--)
+		crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+
+	return crc ^ ~0U;
+}
+
+void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
+{
+    CSHA256().Write((const unsigned char *)src, len).Finalize(hash);
+}
+
+
+/**
+ * @brief Compute the magic number
+ * 
+ * @param symbol the chain symbol
+ * @param supply max supply
+ * @param extraptr details of chain parameters
+ * @param extralen length of extraptr
+ * @return the magic number
+ */
+uint32_t komodo_assetmagic(const char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen)
+{
+    uint8_t buf[512]; 
+    uint32_t crc0=0; 
+    int32_t len = 0; 
+    bits256 hash;
+    if ( strcmp(symbol,"KMD") == 0 )
+        return 0x8de4eef9;
+
+    len = iguana_rwnum(1,&buf[len],sizeof(supply),(void *)&supply);
+    strcpy((char *)&buf[len],symbol);
+    len += strlen(symbol);
+
+    if ( extraptr != 0 && extralen != 0 )
+    {
+        bits256 hash;
+        vcalc_sha256(0,hash.bytes,extraptr,extralen);
+        crc0 = hash.uints[0];
+        for (int32_t i=0; i<extralen; i++)
+            LogPrintf("%02x",extraptr[i]);
+        LogPrintf(" extralen.%d crc0.%x\n",extralen,crc0);
+    }
+
+    return calc_crc32(crc0,buf,len);
+}
+
+/**
+ * @brief Compute the default port
+ * 
+ * @param magic the magic number
+ * @param extralen length of extra chain parameters
+ * @return the default port
+ */
+uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
+{
+    if ( magic == 0x8de4eef9 )
+        return 7770;
+    else if ( extralen == 0 )
+        return 8000 + (magic % 7777);
+    return 16000 + (magic % 49500);
+}
+
+/**
+ * @brief get the magicp and port for this chain
+ * 
+ * @param symbol chain symbol
+ * @param supply max supply
+ * @param[out] magicp the magicp for this chain
+ * @param extraptr details of chain
+ * @param extralen length of extraptr
+ * @return the default port for this chain
+ */
+uint16_t komodo_port(const char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen)
+{
+    if ( symbol == 0 || symbol[0] == 0 || strcmp("KMD",symbol) == 0 )
+    {
+        *magicp = 0x8de4eef9;
+        return 7770;
+    }
+    *magicp = komodo_assetmagic(symbol,supply,extraptr,extralen);
+    return komodo_assetport(*magicp,extralen);
+}
+
+void set_kmd_user_password_port(const std::string& ltc_config_filename)
+{
+    ASSETCHAINS_P2PPORT = 7770; // default port for P2P
+    ASSETCHAINS_RPCPORT = 7771; // default port for RPC
+}
+
+class CChainParams {
+public:
+    // Constructor to initialize the coinbaseMaturity
+    CChainParams(uint32_t maturity = 100) : coinbaseMaturity(maturity) {}
+
+    // Getter for coinbaseMaturity
+    uint32_t CoinbaseMaturity() const { return coinbaseMaturity; }
+
+    // Setter for coinbaseMaturity
+    void SetCoinbaseMaturity(uint32_t in) const { coinbaseMaturity = in; }
+
+private:
+    // Mutable member to allow modification in const function
+    mutable uint32_t coinbaseMaturity;
+} instanceCChainParams;
+
+const CChainParams& Params() {
+    return instanceCChainParams;
+}
+
+// Dummy implementation of is_STAKED function
+bool is_STAKED(const std::string& symbol) {
+    // Implementation depends on the symbol, returning false for demonstration
+    return false;
+}
+
+assetchain chainName;
+
+/*** komodo_args ****/
 void komodo_args(char *argv0)
 {
     uint8_t extrabuf[32756];
@@ -650,10 +1016,11 @@ void komodo_args(char *argv0)
 
         MAX_MONEY = komodo_max_money();
         int32_t baseid;
-        if ( (baseid = komodo_baseid(chainName.symbol().c_str())) >= 0 && baseid < 32 )
-        {
-            LogPrintf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,chainName.symbol().c_str(),(double)MAX_MONEY/SATOSHIDEN);
-        }
+
+        // if ( (baseid = komodo_baseid(chainName.symbol().c_str())) >= 0 && baseid < 32 )
+        // {
+        //     LogPrintf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,chainName.symbol().c_str(),(double)MAX_MONEY/SATOSHIDEN);
+        // }
 
         if ( ASSETCHAINS_CC >= KOMODO_FIRSTFUNGIBLEID && MAX_MONEY < 1000000LL*SATOSHIDEN )
             MAX_MONEY = 1000000LL*SATOSHIDEN;
@@ -670,15 +1037,15 @@ void komodo_args(char *argv0)
             ASSETCHAINS_P2PPORT = tmpport;
 
         char* dirname = nullptr;
-        while ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
-        {
-            LogPrintf("waiting for datadir (%s)\n",dirname);
-#ifndef _WIN32
-            sleep(3);
-#else
-            boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
-#endif
-        }
+//         while ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
+//         {
+//             LogPrintf("waiting for datadir (%s)\n",dirname);
+// #ifndef _WIN32
+//             sleep(3);
+// #else
+//             boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
+// #endif
+//         }
         if ( !chainName.isKMD() )
         {
             if ( chainName.isSymbol("KMD") )
@@ -687,9 +1054,12 @@ void komodo_args(char *argv0)
                 StartShutdown();
             }
             uint16_t port;
-            if ( (port= komodo_userpass(ASSETCHAINS_USERPASS,chainName.symbol().c_str())) != 0 )
-                ASSETCHAINS_RPCPORT = port;
-            else komodo_configfile(chainName.symbol().c_str(),ASSETCHAINS_P2PPORT + 1);
+            port = ASSETCHAINS_P2PPORT + 1;
+            ASSETCHAINS_RPCPORT = port;
+            
+            // if ( (port= komodo_userpass(ASSETCHAINS_USERPASS,chainName.symbol().c_str())) != 0 )
+            //     ASSETCHAINS_RPCPORT = port;
+            // else komodo_configfile(chainName.symbol().c_str(),ASSETCHAINS_P2PPORT + 1);
 
             if (ASSETCHAINS_CBMATURITY != 0)
                 Params().SetCoinbaseMaturity(ASSETCHAINS_CBMATURITY);
@@ -756,71 +1126,71 @@ void komodo_args(char *argv0)
             LogPrintf("-ac_private for a non-PIRATE chain is not supported. The only reason to have an -ac_private chain is for total privacy and that is best achieved with the largest anon set. PIRATE has that and it is recommended to just use PIRATE\n");
             StartShutdown();
         }
-        // Set cc enables for all existing ac_cc chains here. 
-        if ( chainName.isSymbol("AXO") )
-        {
-            // No CCs used on this chain yet.
-            CCDISABLEALL;
-        }
-        if ( chainName.isSymbol("CCL") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-            CCENABLE(EVAL_TOKENS);
-            CCENABLE(EVAL_HEIR);
-        }
-        if ( chainName.isSymbol("COQUI") )
-        {
-            CCDISABLEALL;
-            CCENABLE(EVAL_DICE);
-            CCENABLE(EVAL_CHANNELS);
-            CCENABLE(EVAL_ORACLES);
-            CCENABLE(EVAL_ASSETS);
-            CCENABLE(EVAL_TOKENS);
-        }
-        if ( chainName.isSymbol("DION") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-        }
+        // // Set cc enables for all existing ac_cc chains here. 
+        // if ( chainName.isSymbol("AXO") )
+        // {
+        //     // No CCs used on this chain yet.
+        //     CCDISABLEALL;
+        // }
+        // if ( chainName.isSymbol("CCL") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        //     CCENABLE(EVAL_TOKENS);
+        //     CCENABLE(EVAL_HEIR);
+        // }
+        // if ( chainName.isSymbol("COQUI") )
+        // {
+        //     CCDISABLEALL;
+        //     CCENABLE(EVAL_DICE);
+        //     CCENABLE(EVAL_CHANNELS);
+        //     CCENABLE(EVAL_ORACLES);
+        //     CCENABLE(EVAL_ASSETS);
+        //     CCENABLE(EVAL_TOKENS);
+        // }
+        // if ( chainName.isSymbol("DION") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        // }
         
-        if ( chainName.isSymbol("EQL") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-        }
-        if ( chainName.isSymbol("ILN") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-        }
-        if ( chainName.isSymbol("OUR") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-        }
-        if ( chainName.isSymbol("ZEXO") )
-        {
-            // No CCs used on this chain yet. 
-            CCDISABLEALL;
-        }
-        if ( chainName.isSymbol("SEC") )
-        {
-            CCDISABLEALL;
-            CCENABLE(EVAL_ASSETS);
-            CCENABLE(EVAL_TOKENS);
-            CCENABLE(EVAL_ORACLES);
-        }
-        if ( chainName.isSymbol("KMDICE") )
-        {
-            CCDISABLEALL;
-            CCENABLE(EVAL_FAUCET);
-            CCENABLE(EVAL_DICE);
-            CCENABLE(EVAL_ORACLES);
-        }
+        // if ( chainName.isSymbol("EQL") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        // }
+        // if ( chainName.isSymbol("ILN") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        // }
+        // if ( chainName.isSymbol("OUR") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        // }
+        // if ( chainName.isSymbol("ZEXO") )
+        // {
+        //     // No CCs used on this chain yet. 
+        //     CCDISABLEALL;
+        // }
+        // if ( chainName.isSymbol("SEC") )
+        // {
+        //     CCDISABLEALL;
+        //     CCENABLE(EVAL_ASSETS);
+        //     CCENABLE(EVAL_TOKENS);
+        //     CCENABLE(EVAL_ORACLES);
+        // }
+        // if ( chainName.isSymbol("KMDICE") )
+        // {
+        //     CCDISABLEALL;
+        //     CCENABLE(EVAL_FAUCET);
+        //     CCENABLE(EVAL_DICE);
+        //     CCENABLE(EVAL_ORACLES);
+        // }
     } 
     else 
-        BITCOIND_RPCPORT = GetArg("-rpcport", BaseParams().RPCPort());
+        BITCOIND_RPCPORT = GetArg("-rpcport", 7771 /* BaseParams().RPCPort() */);
     KOMODO_DPOWCONFS = GetArg("-dpowconfs",dpowconfs);
     if ( chainName.isKMD() 
             || chainName.isSymbol("SUPERNET") 

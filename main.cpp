@@ -2,7 +2,12 @@
 #include <map>
 #include <vector>
 
+#include "assetchain.h"
 #include "komodo_utils.h"
+#include "komodo_globals.h"
+
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 static void InterpretNegativeSetting(std::string name, std::map<std::string, std::string>& mapSettingsRet)
 {
@@ -62,29 +67,31 @@ void ParseParameters(int argc, const char* const argv[])
 
 void PrintMapArgs()
 {
-    std::cout << "mapArgs:" << std::endl;
+    std::cerr << "mapArgs:" << std::endl;
     for (const auto& entry : mapArgs)
     {
-        std::cout << entry.first << " = " << entry.second << std::endl;
+        std::cerr << entry.first << " = " << entry.second << std::endl;
     }
 }
 
 void PrintMapMultiArgs()
 {
-    std::cout << "mapMultiArgs:" << std::endl;
+    std::cerr << "mapMultiArgs:" << std::endl;
     for (const auto& entry : mapMultiArgs)
     {
-        std::cout << entry.first << " = [ ";
+        std::cerr << entry.first << " = [ ";
         for (const auto& value : entry.second)
         {
-            std::cout << value << " ";
+            std::cerr << value << " ";
         }
-        std::cout << "]" << std::endl;
+        std::cerr << "]" << std::endl;
     }
 }
 
+extern assetchain chainName;
+
 int main(int argc, char **argv) {
-    std::cout << "komodo-chainparams (c) Decker" << std::endl;
+    std::cerr << "komodo-chainparams (c) Decker" << std::endl;
 
     // ParseParameters(argc, argv.get()); // before calling komodo_args -ac_name param should be set in mapArgs
     // komodo_args(argv0Data.get());      // argv0 is passed in try to get ac_name from program suffixes (works for MNZ and BTCH only)
@@ -93,9 +100,16 @@ int main(int argc, char **argv) {
     ParseParameters(argc, argv);
     PrintMapArgs();
     PrintMapMultiArgs();
-    // komodo_args(argv[0]);
+    komodo_args(argv[0]);
     // chainparams_commandline();
 
+    json j;
+    j["chainname"] = chainName.ToString();
+    j["p2pport"] = ASSETCHAINS_P2PPORT;
+    j["rpcport"] = ASSETCHAINS_RPCPORT;
+    
+    std::string s = j.dump();
+    std::cout << s << std::endl;
 
     return 0;
 }

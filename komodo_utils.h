@@ -26,4 +26,11 @@ void calc_rmd160_sha256(uint8_t rmd160[20],uint8_t *data,int32_t datalen);
 #define ASSETCHAINS_N 96
 #define ASSETCHAINS_K 5
 
+#ifndef SATOSHIDEN
+#define SATOSHIDEN ((uint64_t)100000000L)
+#define dstr(x) ((double)(x) / SATOSHIDEN)
+#endif
+
+void komodo_args(char *argv0);
+
 #endif // KOMODO_UTILS_H

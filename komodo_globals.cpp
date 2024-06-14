@@ -1,4 +1,5 @@
 #include "komodo_globals.h"
+#include <algorithm>
 
 bool KOMODO_LOADINGBLOCKS; // defined in pow.cpp, boolean, 1 if currently loading the block index, 0 if not
 bool IS_KOMODO_NOTARY;
@@ -71,3 +72,33 @@ uint64_t ASSETCHAINS_NK[2];
 
 #define _COINBASE_MATURITY 100  // defauly maturity
 unsigned int WITNESS_CACHE_SIZE = _COINBASE_MATURITY+10;
+
+class komodo_state
+{
+public:
+    std::string symbol;
+};
+
+#define KOMODO_STATES_NUMBER 2
+// extern struct komodo_state KOMODO_STATES[];
+struct komodo_state KOMODO_STATES[KOMODO_STATES_NUMBER]; // 0 == asset chain, 1 == KMD
+
+/**
+ * @brief Given a currency name, return the index in the KOMODO_STATES array
+ * 
+ * @param origbase the currency name to look for
+ * @return 0 for an asset chain, 1 for KMD, or -1
+ */
+int32_t komodo_baseid(const char *origbase)
+{
+    // convert to upper case
+    std::string base(origbase);
+    std::transform(base.begin(), base.end(), base.begin(), [](char s)
+                   { return toupper(s & 0xff); });
+    for (size_t i = 0; i < KOMODO_STATES_NUMBER; ++i)
+    {
+        if (KOMODO_STATES[i].symbol == base)
+            return i;
+    }
+    return -1;
+}
