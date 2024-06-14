@@ -4,3 +4,6 @@
 
 # Ignore komodo-chainparams binary
 komodo-chainparams
+
+# Ignore iguana files
+*_7776
