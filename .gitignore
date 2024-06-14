@@ -1,0 +1,6 @@
+# Ignore C++ object files
+*.o
+*.obj
+
+# Ignore komodo-chainparams binary
+komodo-chainparams
