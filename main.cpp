@@ -113,6 +113,33 @@ int main(int argc, char **argv) {
     // chainparams_commandline();         // set CChainParams (pCurrentParams) from ASSETCHAINS_* global variables
 
     ParseParameters(argc, argv);
+
+    if (GetBoolArg("-help", false))
+    {
+        std::string help_message =
+            "komodo-chainparams is a small utility designed to determine the P2P and RPC ports of\n"
+            "Komodo assetchains without launching a Komodo daemon (komodod). It can be useful in\n"
+            "scripts, GitHub Workflows, etc. The utility simply copies the original port number\n"
+            "determination code from the daemon and is highly unoptimized. In other words, it is\n"
+            "just a \"cut off\" version of the original komodod code, modified to launch separately.";
+
+        std::cerr << std::endl
+                  << help_message << std::endl;
+
+        std::string usage_message =
+            "Usage:\n"
+            "./komodo-chainparams <chain parameters>\n"
+            "Example:\n"
+            "./komodo-chainparams -ac_name=DOC -ac_supply=90000000000 -ac_reward=100000000 -ac_cc=3\n"
+            "-ac_staked=10 -addnode=65.21.77.109 -addnode=65.21.51.47 -addnode=209.222.101.247\n"
+            "-addnode=103.195.100.32 | jq .";
+
+        std::cerr << std::endl
+                  << usage_message << std::endl;
+
+        return 0;
+    }
+
     PrintMapArgs();
     PrintMapMultiArgs();
     komodo_args(argv[0]);
