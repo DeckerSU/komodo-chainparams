@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <map>
 #include <vector>
 
@@ -88,6 +89,20 @@ void PrintMapMultiArgs()
     }
 }
 
+std::string magicToHex(uint32_t magic) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0') << std::setw(8) << magic;
+    return ss.str();
+}
+
+uint32_t swapBytes(uint32_t num) {
+    uint32_t byte0 = (num & 0x000000FF) << 24;
+    uint32_t byte1 = (num & 0x0000FF00) << 8;
+    uint32_t byte2 = (num & 0x00FF0000) >> 8;
+    uint32_t byte3 = (num & 0xFF000000) >> 24;
+    return (byte0 | byte1 | byte2 | byte3);
+}
+
 extern assetchain chainName;
 
 int main(int argc, char **argv) {
@@ -107,6 +122,9 @@ int main(int argc, char **argv) {
     j["chainname"] = chainName.ToString();
     j["p2pport"] = ASSETCHAINS_P2PPORT;
     j["rpcport"] = ASSETCHAINS_RPCPORT;
+    j["magic"] = ASSETCHAINS_MAGIC;
+    j["magic_hex"] = magicToHex(ASSETCHAINS_MAGIC);
+    j["magic_bytes"] = magicToHex(swapBytes(ASSETCHAINS_MAGIC));
     
     std::string s = j.dump();
     std::cout << s << std::endl;

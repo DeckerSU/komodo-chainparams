@@ -23,6 +23,7 @@
 				"-std=c++11",
 				"-fdiagnostics-color=always",
 				"-g",
+				"-O2",
 				"hex.c",
 				"main.cpp",
 				"komodo_globals.cpp",
