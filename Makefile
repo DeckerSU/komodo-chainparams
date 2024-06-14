@@ -2,7 +2,7 @@
 CXX = g++
 
 # Flags
-CXXFLAGS = -std=c++11 -fdiagnostics-color=always -g -O2 -I. \
+CXXFLAGS = -std=c++17 -fdiagnostics-color=always -g -O2 -I. \
            -DHAVE_DECL_LE64TOH=1 \
            -DHAVE_DECL_HTOBE16=1 \
            -DHAVE_DECL_HTOLE16=1 \

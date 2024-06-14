@@ -20,7 +20,7 @@
 				"-DHAVE_DECL_HTOLE64=1",
 				"-DHAVE_DECL_BE64TOH=1",
 				"-DHAVE_DECL_STRNLEN=1",
-				"-std=c++11",
+				"-std=c++17",
 				"-fdiagnostics-color=always",
 				"-g",
 				"-O2",
