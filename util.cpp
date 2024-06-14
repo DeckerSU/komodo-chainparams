@@ -3,6 +3,7 @@
 #include <sstream>
 #include <ctime>
 #include <string>
+#include <cstdint>
 
 using namespace std;
 
