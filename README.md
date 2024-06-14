@@ -13,7 +13,10 @@ make -f ./Makefile all -j$(nproc)
 #### Launch
 
 ```bash
-#./komodo-chainparams <chain parameters>
+./komodo-chainparams <chain parameters>
+```
+Example:
+```bash
 ./komodo-chainparams -ac_name=DOC -ac_supply=90000000000 -ac_reward=100000000 -ac_cc=3 -ac_staked=10 -addnode=65.21.77.109 -addnode=65.21.51.47 -addnode=209.222.101.247 -addnode=103.195.100.32 | jq .
 ```
 
@@ -41,6 +44,9 @@ docker build --no-cache -t komodo-chainparams .
 Launch:
 
 ```bash
-# docker run --rm komodo-chainparams <chain_parameters> | jq .
+docker run --rm komodo-chainparams <chain_parameters> | jq .
+```
+Example:
+```bash
 docker run --rm komodo-chainparams -ac_name=DOC -ac_supply=90000000000 -ac_reward=100000000 -ac_cc=3 -ac_staked=10 -addnode=65.21.77.109 -addnode=65.21.51.47 -addnode=209.222.101.247 -addnode=103.195.100.32 | jq .
 ```
