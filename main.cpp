@@ -104,14 +104,10 @@ uint32_t swapBytes(uint32_t num) {
 }
 
 extern assetchain chainName;
-
-const std::string YELLOW = "\033[33m";
-const std::string RESET = "\033[0m";
-
-static const std::string AppVersion = "1.0a";
+static const std::string AppVersion = "1.01a";
 
 int main(int argc, char **argv) {
-    std::cerr << "komodo-chainparams " << YELLOW << "v" << AppVersion << RESET << " (q) Decker" << std::endl;
+    std::cerr << "komodo-chainparams v" << AppVersion << " (q) Decker" << std::endl;
 
     // ParseParameters(argc, argv.get()); // before calling komodo_args -ac_name param should be set in mapArgs
     // komodo_args(argv0Data.get());      // argv0 is passed in try to get ac_name from program suffixes (works for MNZ and BTCH only)
