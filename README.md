@@ -50,3 +50,10 @@ Example:
 ```bash
 docker run --rm komodo-chainparams -ac_name=DOC -ac_supply=90000000000 -ac_reward=100000000 -ac_cc=3 -ac_staked=10 -addnode=65.21.77.109 -addnode=65.21.51.47 -addnode=209.222.101.247 -addnode=103.195.100.32 | jq .
 ```
+
+Run from DockerHub:
+
+```
+docker pull deckersu/komodo-chainparams:latest
+docker run --rm deckersu/komodo-chainparams:latest <chain_parameters> | jq .
+```
